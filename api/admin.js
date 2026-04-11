@@ -15,46 +15,21 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Password admin salah' });
   }
   
-  // ========== GENERATE KODE AKTIVASI ==========
+  // ========== GENERATE KODE AKTIVASI (PANGGIL ACTIVATE API) ==========
   if (action === 'generate') {
     if (!name) return res.status(400).json({ error: 'Nama diperlukan' });
     
-    const credit = parseInt(max_credit) || 1000;
-    
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
-    const seg = () => {
-      let s = '';
-      for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
-      return s;
-    };
-    const newCode = `${seg()}-${seg()}-${seg()}-${seg()}`;
-    
-    let expiry_date = null;
-    if (days && days > 0) {
-      const date = new Date();
-      date.setDate(date.getDate() + parseInt(days));
-      expiry_date = date.toISOString().split('T')[0];
-    }
-    
-    // Simpan ke activate.js (panggil API internal)
     try {
-      const API_BASE = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
-      await fetch(`${API_BASE}/api/activate`, {
+      const activateRes = await fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/activate`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: ADMIN_PASS, name, max_credit: credit, days })
+        body: JSON.stringify({ password: ADMIN_PASS, name, max_credit: max_credit || 1000, days: days || 30 })
       });
+      const data = await activateRes.json();
+      return res.status(200).json(data);
     } catch(e) {
-      console.log("Save error:", e);
+      return res.status(200).json({ success: false, error: e.message });
     }
-    
-    return res.status(200).json({
-      success: true,
-      code: newCode,
-      name: name,
-      max_credit: credit,
-      expiry_date: expiry_date || 'forever'
-    });
   }
   
   // ========== TEST DEEPSEEK API ==========
@@ -86,7 +61,7 @@ export default async function handler(req, res) {
     }
   }
   
-  // ========== TEST GEMINI API 2.5 FLASH ==========
+  // ========== TEST GEMINI API ==========
   if (action === 'test-gemini') {
     if (!apiKey) return res.status(400).json({ error: 'API Key diperlukan' });
     
@@ -108,10 +83,7 @@ export default async function handler(req, res) {
       const data = await testRes.json();
       
       if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-        return res.status(200).json({ 
-          valid: true, 
-          message: "Gemini API key VALID! (gemini-2.5-flash)"
-        });
+        return res.status(200).json({ valid: true, message: "Gemini API key VALID!" });
       } else if (data.error) {
         return res.status(200).json({ valid: false, error: data.error.message });
       } else {
@@ -123,4 +95,4 @@ export default async function handler(req, res) {
   }
   
   return res.status(400).json({ error: 'Action tidak dikenal' });
-}
+      }
