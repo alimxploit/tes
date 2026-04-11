@@ -57,10 +57,10 @@ export default async function handler(req, res) {
     } catch(e) { console.log("DeepSeek error:", e); }
   }
   
-  // Fallback ke Gemini (pake gemini-1.5-flash)
+  // Fallback ke Gemini (pake gemini-1.5-pro)
   if (!aiResponse && GEMINI_KEY) {
     try {
-      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`, {
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_KEY}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -70,8 +70,11 @@ export default async function handler(req, res) {
       const data = await geminiRes.json();
       if (data.candidates && data.candidates[0]) {
         aiResponse = data.candidates[0].content.parts[0].text;
+      } else if (data.error) {
+        console.log("Gemini error:", data.error);
+        aiResponse = `⚠️ Gemini Error: ${data.error.message}. Coba pake DeepSeek atau periksa API key.`;
       }
-    } catch(e) { console.log("Gemini error:", e); }
+    } catch(e) { console.log("Gemini fetch error:", e); }
   }
   
   if (!aiResponse) {
