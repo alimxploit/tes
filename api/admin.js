@@ -1,98 +1,147 @@
-// api/admin.js
+// api/admin.js - FULL WITH DATABASE MEMORY
 const ADMIN_PASS = "xiolimadmin123";
+
+// GLOBAL DATABASE (shared dengan activate.js)
+let globalUsers = [];
+
+function getExpiryDateFromDays(days) {
+  if (!days || days <= 0) return null;
+  const date = new Date();
+  date.setDate(date.getDate() + parseInt(days));
+  return date.toISOString().split('T')[0];
+}
+
+function generateCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+  const seg = () => {
+    let s = '';
+    for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+  };
+  return `${seg()}-${seg()}-${seg()}-${seg()}`;
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   
-  const { action, password, name, max_credit, days, apiKey } = req.body;
+  const { action, password, name, max_credit, days, apiKey, code } = req.body;
+  const { admin, code: queryCode } = req.query;
   
-  if (password !== ADMIN_PASS) {
-    return res.status(401).json({ error: 'Password admin salah' });
-  }
-  
-  // ========== GENERATE KODE AKTIVASI (PANGGIL ACTIVATE API) ==========
-  if (action === 'generate') {
-    if (!name) return res.status(400).json({ error: 'Nama diperlukan' });
+  // ========== GET: cek kode aktivasi (untuk user) ==========
+  if (req.method === 'GET' && !admin) {
+    if (!queryCode) return res.status(400).json({ error: 'Kode diperlukan' });
     
-    try {
-      const activateRes = await fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/activate`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: ADMIN_PASS, name, max_credit: max_credit || 1000, days: days || 30 })
-      });
-      const data = await activateRes.json();
-      return res.status(200).json(data);
-    } catch(e) {
-      return res.status(200).json({ success: false, error: e.message });
-    }
-  }
-  
-  // ========== TEST DEEPSEEK API ==========
-  if (action === 'test-deepseek') {
-    if (!apiKey) return res.status(400).json({ error: 'API Key diperlukan' });
+    const cleanCode = queryCode.trim().toUpperCase();
+    const found = globalUsers.find(c => c.code === cleanCode);
     
-    try {
-      const testRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [{ role: "user", content: "Halo" }],
-          max_tokens: 10
-        })
-      });
-      
-      const data = await testRes.json();
-      if (data.choices && data.choices[0]) {
-        return res.status(200).json({ valid: true, message: "DeepSeek API key VALID!" });
-      } else {
-        return res.status(200).json({ valid: false, error: data.error?.message || "Invalid key" });
-      }
-    } catch(e) {
-      return res.status(200).json({ valid: false, error: e.message });
-    }
-  }
-  
-  // ========== TEST GEMINI API ==========
-  if (action === 'test-gemini') {
-    if (!apiKey) return res.status(400).json({ error: 'API Key diperlukan' });
+    if (!found) return res.status(404).json({ valid: false, error: 'Kode tidak ditemukan' });
+    if (found.banned) return res.status(403).json({ valid: false, error: 'Kode telah dibanned' });
     
-    try {
-      const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: "Halo, balas dengan 'OK'" }] }],
-          safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-          ]
-        }),
-      });
-      
-      const data = await testRes.json();
-      
-      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-        return res.status(200).json({ valid: true, message: "Gemini API key VALID!" });
-      } else if (data.error) {
-        return res.status(200).json({ valid: false, error: data.error.message });
-      } else {
-        return res.status(200).json({ valid: false, error: "Invalid response from Gemini" });
+    if (found.expiry_date) {
+      const today = new Date().toISOString().split('T')[0];
+      if (today > found.expiry_date) {
+        return res.status(403).json({ valid: false, error: `Kode kadaluarsa (${found.expiry_date})` });
       }
-    } catch(e) {
-      return res.status(200).json({ valid: false, error: e.message });
     }
+    
+    if (found.used_credit >= found.max_credit) {
+      return res.status(403).json({ valid: false, error: `Credit habis (${found.used_credit}/${found.max_credit})` });
+    }
+    
+    return res.status(200).json({
+      valid: true,
+      name: found.name,
+      max_credit: found.max_credit,
+      used_credit: found.used_credit,
+      expiry_date: found.expiry_date
+    });
   }
   
-  return res.status(400).json({ error: 'Action tidak dikenal' });
-      }
+  // ========== POST: gunakan credit (untuk chat) ==========
+  if (req.method === 'POST') {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: 'Kode diperlukan' });
+    
+    const cleanCode = code.trim().toUpperCase();
+    const found = globalUsers.find(c => c.code === cleanCode);
+    
+    if (!found || found.banned) {
+      return res.status(404).json({ error: 'Kode tidak valid' });
+    }
+    
+    if (found.used_credit >= found.max_credit) {
+      return res.status(403).json({ error: 'Credit habis' });
+    }
+    
+    found.used_credit++;
+    
+    return res.status(200).json({ 
+      success: true, 
+      remaining: found.max_credit - found.used_credit
+    });
+  }
+  
+  // ========== PUT: generate kode baru (admin) ==========
+  if (req.method === 'PUT') {
+    if (password !== ADMIN_PASS) {
+      return res.status(401).json({ error: 'Password admin salah' });
+    }
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Nama user diperlukan' });
+    }
+    
+    const credit = parseInt(max_credit) || 1000;
+    const expiryDate = getExpiryDateFromDays(days);
+    const newCode = generateCode();
+    
+    const newUser = {
+      code: newCode,
+      name: name.trim(),
+      max_credit: credit,
+      used_credit: 0,
+      banned: false,
+      expiry_date: expiryDate,
+      created_at: new Date().toISOString()
+    };
+    
+    globalUsers.push(newUser);
+    
+    return res.status(200).json({
+      success: true,
+      code: newCode,
+      name: name,
+      max_credit: credit,
+      expiry_date: expiryDate || 'forever'
+    });
+  }
+  
+  // ========== GET: lihat semua user (admin) ==========
+  if (req.method === 'GET' && admin === 'true') {
+    const { password } = req.query;
+    if (password !== ADMIN_PASS) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    return res.status(200).json(globalUsers);
+  }
+  
+  // ========== DELETE: banned user ==========
+  if (req.method === 'DELETE') {
+    const { password, code } = req.query;
+    if (password !== ADMIN_PASS) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const index = globalUsers.findIndex(c => c.code === code);
+    if (index !== -1) {
+      globalUsers[index].banned = true;
+      return res.status(200).json({ success: true, message: 'Kode dibanned' });
+    }
+    return res.status(404).json({ error: 'Kode tidak ditemukan' });
+  }
+  
+  return res.status(405).json({ error: 'Method not allowed' });
+}
