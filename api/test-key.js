@@ -17,53 +17,26 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'API Key diperlukan' });
   }
   
-  // Test DeepSeek API
-  if (type === 'deepseek') {
+  // Test OpenRouter API
+  if (type === 'openrouter') {
     try {
-      const testRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      const testRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://wormgpt.vercel.app"
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [{ role: "user", content: "Halo" }],
+          model: "google/gemini-2.5-flash",
+          messages: [{ role: "user", content: "Balas dengan OK" }],
           max_tokens: 10
         })
       });
       
       const data = await testRes.json();
       if (data.choices && data.choices[0]) {
-        return res.status(200).json({ valid: true, message: "DeepSeek API key VALID!" });
-      } else {
-        return res.status(200).json({ valid: false, error: data.error?.message || "Invalid key" });
-      }
-    } catch(e) {
-      return res.status(200).json({ valid: false, error: e.message });
-    }
-  }
-  
-  // Test Gemini API
-  if (type === 'gemini') {
-    try {
-      const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: "Halo" }] }],
-          safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-          ]
-        }),
-      });
-      
-      const data = await testRes.json();
-      if (data.candidates && data.candidates[0]) {
-        return res.status(200).json({ valid: true, message: "Gemini API key VALID!" });
+        return res.status(200).json({ valid: true, message: "OpenRouter API key VALID!" });
       } else {
         return res.status(200).json({ valid: false, error: data.error?.message || "Invalid key" });
       }
@@ -73,4 +46,4 @@ export default async function handler(req, res) {
   }
   
   return res.status(400).json({ error: 'Type tidak dikenal' });
-          }
+}
