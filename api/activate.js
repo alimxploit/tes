@@ -1,6 +1,5 @@
-// api/activate.js
+// api/activate.js - SINGLE SOURCE OF TRUTH
 let globalUsers = [];
-
 const ADMIN_PASS = "xiolimadmin123";
 
 function getExpiryDateFromDays(days) {
@@ -22,7 +21,7 @@ function generateCode() {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -54,12 +53,11 @@ export default async function handler(req, res) {
       name: found.name,
       max_credit: found.max_credit,
       used_credit: found.used_credit,
-      expiry_date: found.expiry_date,
-      message: "Aktivasi berhasil!"
+      expiry_date: found.expiry_date
     });
   }
   
-  // POST: gunakan credit
+  // POST: gunakan credit (kurangi 1 setiap chat)
   if (req.method === 'POST') {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'Kode diperlukan' });
@@ -83,7 +81,7 @@ export default async function handler(req, res) {
     });
   }
   
-  // ADMIN: generate kode baru
+  // PUT: generate kode baru (bisa dipanggil dari admin panel)
   if (req.method === 'PUT') {
     const { password, name, max_credit, days } = req.body;
     
@@ -116,12 +114,11 @@ export default async function handler(req, res) {
       code: newCode,
       name: name,
       max_credit: credit,
-      expiry_date: expiryDate || 'forever',
-      message: "Kode berhasil dibuat"
+      expiry_date: expiryDate || 'forever'
     });
   }
   
-  // ADMIN: lihat semua user
+  // GET: lihat semua user (admin)
   if (req.method === 'GET' && req.query.admin === 'true') {
     const { password } = req.query;
     if (password !== ADMIN_PASS) {
@@ -130,7 +127,7 @@ export default async function handler(req, res) {
     return res.status(200).json(globalUsers);
   }
   
-  // ADMIN: banned user
+  // DELETE: banned user
   if (req.method === 'DELETE') {
     const { password, code } = req.query;
     if (password !== ADMIN_PASS) {
@@ -144,34 +141,5 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: 'Kode tidak ditemukan' });
   }
   
-  // ADMIN: perpanjang user
-  if (req.method === 'PATCH') {
-    const { password, code, days, add_credit } = req.body;
-    if (password !== ADMIN_PASS) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const index = globalUsers.findIndex(c => c.code === code);
-    if (index === -1) {
-      return res.status(404).json({ error: 'Kode tidak ditemukan' });
-    }
-    
-    if (days && days > 0) {
-      const newExpiry = getExpiryDateFromDays(days);
-      globalUsers[index].expiry_date = newExpiry;
-    }
-    
-    if (add_credit && add_credit > 0) {
-      globalUsers[index].max_credit += parseInt(add_credit);
-    }
-    
-    globalUsers[index].banned = false;
-    
-    return res.status(200).json({ 
-      success: true, 
-      user: globalUsers[index],
-      message: 'User diperpanjang'
-    });
-  }
-  
   return res.status(405).json({ error: 'Method not allowed' });
-  }
+}
