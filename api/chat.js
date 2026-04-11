@@ -120,7 +120,7 @@ Sekarang user berkata: `;
         aiResponse = data.candidates[0].content.parts[0].text;
       } else if (data.error) {
         console.log("Gemini error:", data.error);
-        aiResponse = `⚠️ Error: ${data.error.message}`;
+        aiResponse = `⚠️ Gemini Error: ${data.error.message}. Cek API key atau coba pake VPN.`;
       }
     } catch(e) { 
       console.log("Gemini fetch error:", e.message);
@@ -130,7 +130,7 @@ Sekarang user berkata: `;
   
   if (!aiResponse) {
     return res.status(503).json({ 
-      error: '⚠️ GEMINI_API_KEY tidak valid atau belum diset. Dapatkan API key gratis di aistudio.google.com' 
+      error: '⚠️ GEMINI_API_KEY error. Pastikan: 1) API key dari aistudio.google.com, 2) VPN aktif, 3) Coba test lewat terminal dulu.' 
     });
   }
   
