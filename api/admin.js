@@ -1,5 +1,5 @@
 // api/admin.js
-const ADMIN_PASS = "xiolimadmin123";
+const ADMIN_PASS = "xiolim";
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   
-  const { action, password, name, code } = req.body;
+  const { action, password, name, max_credit, days, code, add_credit, apiKey } = req.body;
   
   if (password !== ADMIN_PASS) {
     return res.status(401).json({ error: 'Password admin salah' });
@@ -19,6 +19,8 @@ export default async function handler(req, res) {
   if (action === 'generate') {
     if (!name) return res.status(400).json({ error: 'Nama diperlukan' });
     
+    const credit = parseInt(max_credit) || 1000;
+    
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
     const seg = () => {
       let s = '';
@@ -27,19 +29,24 @@ export default async function handler(req, res) {
     };
     const newCode = `${seg()}-${seg()}-${seg()}-${seg()}`;
     
-    // Panggil API activate.js untuk menyimpan (simplifikasi)
-    // Di production, pake database
+    let expiry_date = null;
+    if (days && days > 0) {
+      const date = new Date();
+      date.setDate(date.getDate() + parseInt(days));
+      expiry_date = date.toISOString().split('T')[0];
+    }
     
     return res.status(200).json({
       success: true,
       code: newCode,
-      name: name
+      name: name,
+      max_credit: credit,
+      expiry_date: expiry_date || 'forever'
     });
   }
   
-  // Test API DeepSeek
+  // Test DeepSeek API
   if (action === 'test-deepseek') {
-    const { apiKey } = req.body;
     if (!apiKey) return res.status(400).json({ error: 'API Key diperlukan' });
     
     try {
@@ -66,13 +73,12 @@ export default async function handler(req, res) {
     }
   }
   
-  // Test API Gemini
+  // Test Gemini API (pake gemini-1.5-flash)
   if (action === 'test-gemini') {
-    const { apiKey } = req.body;
     if (!apiKey) return res.status(400).json({ error: 'API Key diperlukan' });
     
     try {
-      const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+      const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
