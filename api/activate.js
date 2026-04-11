@@ -1,9 +1,13 @@
 // api/activate.js
-// Data kode aktivasi (tersimpan di memory Vercel)
 let codes = [];
-
-// Password admin
 const ADMIN_PASS = "xiolimadmin123";
+
+function getExpiryDateFromDays(days) {
+  if (!days || days <= 0) return null;
+  const date = new Date();
+  date.setDate(date.getDate() + parseInt(days));
+  return date.toISOString().split('T')[0];
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,15 +27,30 @@ export default async function handler(req, res) {
     if (!found) return res.status(404).json({ valid: false, error: 'Kode tidak ditemukan' });
     if (found.banned) return res.status(403).json({ valid: false, error: 'Kode telah dibanned' });
     
+    // Cek expired
+    if (found.expiry_date) {
+      const today = new Date().toISOString().split('T')[0];
+      if (today > found.expiry_date) {
+        return res.status(403).json({ valid: false, error: `Kode kadaluarsa (${found.expiry_date})` });
+      }
+    }
+    
+    // Cek credit
+    if (found.used_credit >= found.max_credit) {
+      return res.status(403).json({ valid: false, error: `Credit habis (${found.used_credit}/${found.max_credit})` });
+    }
+    
     return res.status(200).json({
       valid: true,
       name: found.name,
-      unlimited: true,
-      message: "Aktivasi berhasil! Credit UNLIMITED."
+      max_credit: found.max_credit,
+      used_credit: found.used_credit,
+      expiry_date: found.expiry_date,
+      message: "Aktivasi berhasil!"
     });
   }
   
-  // POST: gunakan credit (tapi karena unlimited, gak perlu kurangi)
+  // POST: gunakan credit (kurangi 1 setiap chat)
   if (req.method === 'POST') {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'Kode diperlukan' });
@@ -43,12 +62,23 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Kode tidak valid' });
     }
     
-    return res.status(200).json({ success: true, unlimited: true });
+    if (found.used_credit >= found.max_credit) {
+      return res.status(403).json({ error: 'Credit habis' });
+    }
+    
+    found.used_credit++;
+    
+    return res.status(200).json({ 
+      success: true, 
+      remaining: found.max_credit - found.used_credit,
+      total: found.max_credit,
+      used: found.used_credit
+    });
   }
   
-  // ADMIN: generate kode baru (UNLIMITED)
+  // ADMIN: generate kode baru (DENGAN CREDIT & WAKTU)
   if (req.method === 'PUT') {
-    const { password, name } = req.body;
+    const { password, name, max_credit, days } = req.body;
     
     if (password !== ADMIN_PASS) {
       return res.status(401).json({ error: 'Password admin salah' });
@@ -58,7 +88,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Nama user diperlukan' });
     }
     
-    // Generate kode random
+    const credit = parseInt(max_credit) || 1000;
+    const expiryDate = getExpiryDateFromDays(days);
+    
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
     const seg = () => {
       let s = '';
@@ -70,8 +102,10 @@ export default async function handler(req, res) {
     codes.push({
       code: newCode,
       name: name.trim(),
+      max_credit: credit,
+      used_credit: 0,
       banned: false,
-      unlimited: true,
+      expiry_date: expiryDate,
       created_at: new Date().toISOString()
     });
     
@@ -79,7 +113,9 @@ export default async function handler(req, res) {
       success: true,
       code: newCode,
       name: name,
-      message: "Kode UNLIMITED berhasil dibuat"
+      max_credit: credit,
+      expiry_date: expiryDate || 'forever',
+      message: "Kode berhasil dibuat"
     });
   }
   
@@ -106,5 +142,34 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: 'Kode tidak ditemukan' });
   }
   
-  return res.status(405).json({ error: 'Method not allowed' });
+  // ADMIN: perpanjang kode
+  if (req.method === 'PATCH') {
+    const { password, code, days, add_credit } = req.body;
+    if (password !== ADMIN_PASS) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const index = codes.findIndex(c => c.code === code);
+    if (index === -1) {
+      return res.status(404).json({ error: 'Kode tidak ditemukan' });
+    }
+    
+    if (days && days > 0) {
+      const newExpiry = getExpiryDateFromDays(days);
+      codes[index].expiry_date = newExpiry;
+    }
+    
+    if (add_credit && add_credit > 0) {
+      codes[index].max_credit += parseInt(add_credit);
+    }
+    
+    codes[index].banned = false;
+    
+    return res.status(200).json({ 
+      success: true, 
+      user: codes[index],
+      message: 'User diperpanjang'
+    });
   }
+  
+  return res.status(405).json({ error: 'Method not allowed' });
+}
