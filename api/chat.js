@@ -1,5 +1,5 @@
 // api/chat.js
-let codes = []; // sync dengan activate.js (di production pake database)
+let codes = [];
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,13 +22,16 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Kode tidak valid atau telah dibanned' });
   }
   
-  // Ambil API key dari environment variables Vercel
+  if (user.used_credit >= user.max_credit) {
+    return res.status(403).json({ error: 'Credit habis' });
+  }
+  
   const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
   const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
   
   let aiResponse = null;
   
-  // Coba DeepSeek dulu
+  // Coba DeepSeek
   if (DEEPSEEK_KEY) {
     try {
       const deepseekRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -50,16 +53,14 @@ export default async function handler(req, res) {
       const data = await deepseekRes.json();
       if (data.choices && data.choices[0]) {
         aiResponse = data.choices[0].message.content;
-      } else if (data.error) {
-        console.log("DeepSeek error:", data.error);
       }
-    } catch(e) { console.log("DeepSeek fetch error:", e); }
+    } catch(e) { console.log("DeepSeek error:", e); }
   }
   
-  // Fallback ke Gemini
+  // Fallback ke Gemini (pake gemini-1.5-flash)
   if (!aiResponse && GEMINI_KEY) {
     try {
-      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_KEY}`, {
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -75,12 +76,16 @@ export default async function handler(req, res) {
   
   if (!aiResponse) {
     return res.status(503).json({ 
-      error: '⚠️ API Key belum diset. Admin harus masukin DeepSeek atau Gemini API Key di environment variables Vercel.' 
+      error: '⚠️ API Key tidak valid atau belum diset. Admin harus masukin DeepSeek atau Gemini API Key di environment variables Vercel.' 
     });
   }
   
+  // Kurangi credit
+  user.used_credit++;
+  
   return res.status(200).json({
     success: true,
-    response: aiResponse
+    response: aiResponse,
+    remaining_credit: user.max_credit - user.used_credit
   });
 }
