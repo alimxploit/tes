@@ -31,7 +31,7 @@ export default async function handler(req, res) {
   
   let aiResponse = null;
   
-  // Coba DeepSeek
+  // Coba DeepSeek dulu
   if (DEEPSEEK_KEY) {
     try {
       const deepseekRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -57,10 +57,10 @@ export default async function handler(req, res) {
     } catch(e) { console.log("DeepSeek error:", e); }
   }
   
-  // Fallback ke Gemini (pake gemini-1.5-pro)
+  // Fallback ke Gemini 2.5 Flash (FREE TIER - WORK UNTUK AKUN BARU)
   if (!aiResponse && GEMINI_KEY) {
     try {
-      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_KEY}`, {
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -72,14 +72,14 @@ export default async function handler(req, res) {
         aiResponse = data.candidates[0].content.parts[0].text;
       } else if (data.error) {
         console.log("Gemini error:", data.error);
-        aiResponse = `⚠️ Gemini Error: ${data.error.message}. Coba pake DeepSeek atau periksa API key.`;
+        aiResponse = `⚠️ Gemini Error: ${data.error.message}. Coba periksa API key atau cek saldo.`;
       }
     } catch(e) { console.log("Gemini fetch error:", e); }
   }
   
   if (!aiResponse) {
     return res.status(503).json({ 
-      error: '⚠️ API Key tidak valid atau belum diset. Admin harus masukin DeepSeek atau Gemini API Key di environment variables Vercel.' 
+      error: '⚠️ API Key tidak valid. Pastikan DEEPSEEK_API_KEY atau GEMINI_API_KEY sudah diset di environment variables Vercel. Dapatkan Gemini API key gratis di aistudio.google.com' 
     });
   }
   
