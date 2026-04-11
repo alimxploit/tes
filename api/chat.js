@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   
   const cleanCode = code.trim().toUpperCase();
   
-  // Cek validasi kode ke admin API
+  // Cek validasi kode
   let userValid = false;
   let userData = null;
   try {
@@ -88,4 +88,4 @@ export default async function handler(req, res) {
     success: true,
     response: aiResponse
   });
-}
+            }
