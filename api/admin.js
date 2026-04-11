@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   
-  const { action, password, name, max_credit, days, code, add_credit, apiKey } = req.body;
+  const { action, password, name, max_credit, days, apiKey } = req.body;
   
   if (password !== ADMIN_PASS) {
     return res.status(401).json({ error: 'Password admin salah' });
@@ -34,6 +34,18 @@ export default async function handler(req, res) {
       const date = new Date();
       date.setDate(date.getDate() + parseInt(days));
       expiry_date = date.toISOString().split('T')[0];
+    }
+    
+    // Simpan ke activate.js (panggil API internal)
+    try {
+      const API_BASE = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+      await fetch(`${API_BASE}/api/activate`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: ADMIN_PASS, name, max_credit: credit, days })
+      });
+    } catch(e) {
+      console.log("Save error:", e);
     }
     
     return res.status(200).json({
@@ -62,10 +74,6 @@ export default async function handler(req, res) {
           max_tokens: 10
         })
       });
-      
-      if (!testRes.ok) {
-        throw new Error(`HTTP ${testRes.status}`);
-      }
       
       const data = await testRes.json();
       if (data.choices && data.choices[0]) {
@@ -102,27 +110,17 @@ export default async function handler(req, res) {
       if (data.candidates && data.candidates[0] && data.candidates[0].content) {
         return res.status(200).json({ 
           valid: true, 
-          message: "Gemini API key VALID! (gemini-2.5-flash)",
-          response: data.candidates[0].content.parts[0].text
+          message: "Gemini API key VALID! (gemini-2.5-flash)"
         });
       } else if (data.error) {
-        return res.status(200).json({ 
-          valid: false, 
-          error: data.error.message 
-        });
+        return res.status(200).json({ valid: false, error: data.error.message });
       } else {
-        return res.status(200).json({ 
-          valid: false, 
-          error: "Invalid response from Gemini" 
-        });
+        return res.status(200).json({ valid: false, error: "Invalid response from Gemini" });
       }
     } catch(e) {
-      return res.status(200).json({ 
-        valid: false, 
-        error: e.message 
-      });
+      return res.status(200).json({ valid: false, error: e.message });
     }
   }
   
   return res.status(400).json({ error: 'Action tidak dikenal' });
-        }
+}
