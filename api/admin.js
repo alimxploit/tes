@@ -1,7 +1,5 @@
-// api/admin.js - FULL WITH DATABASE MEMORY
+// api/admin.js
 const ADMIN_PASS = "xiolimadmin123";
-
-// GLOBAL DATABASE (shared dengan activate.js)
 let globalUsers = [];
 
 function getExpiryDateFromDays(days) {
@@ -28,14 +26,12 @@ export default async function handler(req, res) {
   
   if (req.method === 'OPTIONS') return res.status(200).end();
   
-  const { action, password, name, max_credit, days, apiKey, code } = req.body;
-  const { admin, code: queryCode } = req.query;
-  
-  // ========== GET: cek kode aktivasi (untuk user) ==========
-  if (req.method === 'GET' && !admin) {
-    if (!queryCode) return res.status(400).json({ error: 'Kode diperlukan' });
+  // GET: cek kode aktivasi (untuk user)
+  if (req.method === 'GET' && !req.query.admin) {
+    const { code } = req.query;
+    if (!code) return res.status(400).json({ error: 'Kode diperlukan' });
     
-    const cleanCode = queryCode.trim().toUpperCase();
+    const cleanCode = code.trim().toUpperCase();
     const found = globalUsers.find(c => c.code === cleanCode);
     
     if (!found) return res.status(404).json({ valid: false, error: 'Kode tidak ditemukan' });
@@ -61,7 +57,7 @@ export default async function handler(req, res) {
     });
   }
   
-  // ========== POST: gunakan credit (untuk chat) ==========
+  // POST: gunakan credit (untuk chat)
   if (req.method === 'POST') {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'Kode diperlukan' });
@@ -85,8 +81,10 @@ export default async function handler(req, res) {
     });
   }
   
-  // ========== PUT: generate kode baru (admin) ==========
+  // PUT: generate kode baru (admin)
   if (req.method === 'PUT') {
+    const { password, name, max_credit, days } = req.body;
+    
     if (password !== ADMIN_PASS) {
       return res.status(401).json({ error: 'Password admin salah' });
     }
@@ -120,27 +118,13 @@ export default async function handler(req, res) {
     });
   }
   
-  // ========== GET: lihat semua user (admin) ==========
-  if (req.method === 'GET' && admin === 'true') {
+  // GET: lihat semua user (admin)
+  if (req.method === 'GET' && req.query.admin === 'true') {
     const { password } = req.query;
     if (password !== ADMIN_PASS) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     return res.status(200).json(globalUsers);
-  }
-  
-  // ========== DELETE: banned user ==========
-  if (req.method === 'DELETE') {
-    const { password, code } = req.query;
-    if (password !== ADMIN_PASS) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const index = globalUsers.findIndex(c => c.code === code);
-    if (index !== -1) {
-      globalUsers[index].banned = true;
-      return res.status(200).json({ success: true, message: 'Kode dibanned' });
-    }
-    return res.status(404).json({ error: 'Kode tidak ditemukan' });
   }
   
   return res.status(405).json({ error: 'Method not allowed' });
