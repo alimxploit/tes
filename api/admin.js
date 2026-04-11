@@ -1,5 +1,5 @@
 // api/admin.js
-const ADMIN_PASS = "xiolim";
+const ADMIN_PASS = "xiolimadmin123";
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
