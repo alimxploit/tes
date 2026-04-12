@@ -19,8 +19,8 @@ export default async function handler(req, res) {
   
   if (type === 'gemini') {
     try {
-      // PAKE MODEL YANG MASIH FREE
-      const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+      // PAKE GEMINI 2.5 FLASH
+      const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       const data = await testRes.json();
       
       if (data.candidates && data.candidates[0]) {
-        return res.status(200).json({ valid: true, message: "Gemini API key VALID!" });
+        return res.status(200).json({ valid: true, message: "Gemini API key VALID! (gemini-2.5-flash)" });
       } else if (data.error) {
         return res.status(200).json({ valid: false, error: data.error.message });
       } else {
