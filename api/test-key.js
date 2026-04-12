@@ -17,28 +17,25 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'API Key diperlukan' });
   }
   
-  // Test OpenRouter API
-  if (type === 'openrouter') {
+  if (type === 'gemini') {
     try {
-      const testRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      // PAKE MODEL YANG MASIH FREE
+      const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://wormgpt.vercel.app"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [{ role: "user", content: "Balas dengan OK" }],
-          max_tokens: 10
-        })
+          contents: [{ parts: [{ text: "Balas dengan 'OK'" }] }]
+        }),
       });
       
       const data = await testRes.json();
-      if (data.choices && data.choices[0]) {
-        return res.status(200).json({ valid: true, message: "OpenRouter API key VALID!" });
+      
+      if (data.candidates && data.candidates[0]) {
+        return res.status(200).json({ valid: true, message: "Gemini API key VALID!" });
+      } else if (data.error) {
+        return res.status(200).json({ valid: false, error: data.error.message });
       } else {
-        return res.status(200).json({ valid: false, error: data.error?.message || "Invalid key" });
+        return res.status(200).json({ valid: false, error: "Invalid response" });
       }
     } catch(e) {
       return res.status(200).json({ valid: false, error: e.message });
